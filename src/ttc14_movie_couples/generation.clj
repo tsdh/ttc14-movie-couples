@@ -6,7 +6,7 @@
         m2 (emf/ecreate! model 'Movie :rating (+ 1.0 (* 10 i)))
         m3 (emf/ecreate! model 'Movie :rating (+ 2.0 (* 10 i)))
         m4 (emf/ecreate! model 'Movie :rating (+ 3.0 (* 10 i)))
-        m5 (emf/ecreate! model 'Movie :rating (+ 5.0 (* 10 i)))]
+        m5 (emf/ecreate! model 'Movie :rating (+ 4.0 (* 10 i)))]
     (emf/ecreate! model 'Actor   :name (str "a" (* 10 i))       :movies [m1 m2 m3 m4])
     (emf/ecreate! model 'Actor   :name (str "a" (+ 1 (* 10 i))) :movies [m1 m2 m3 m4])
     (emf/ecreate! model 'Actor   :name (str "a" (+ 2 (* 10 i))) :movies [m2 m3 m4])
