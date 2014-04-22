@@ -32,23 +32,40 @@
                   (query/spit-top-n-groups-of-size-x
                    m 15 n (format "query-results/synth-%s.query.%s" N n)))))))
 
-(deftest ^:imdb test-imdb-models
+(deftest ^:imdb test-imdb-models-couples
   (println)
-  (println "Tests on IMDb Models")
-  (println "====================")
+  (println "Tests on IMDb Models (Couples)")
+  (println "==============================")
   (println)
   (doseq [f (sort (map #(.getName ^java.io.File %)
                        (.listFiles (java.io.File. "models"))))
           :when (re-matches #".*\.movies(?:\.bin)?" f)]
-    (doseq [[func n] [[transform/make-groups-of-2! 2]
-                      [transform/make-groups-of-3! 3]]]
-      (System/gc)
-      (println "Model" f "/ Groups of" n)
-      (let [m (u/timing "    Load time: %T" (load-model (str "models/" f)))
-            size (count (emf/eallobjects m))]
-        (println "    Model size:" (.size (.getContents ^Resource m)) "elements")
-        (u/timing "    No. groups (%s): %R\n    Exec. time: %T" (func m 3) n)
-        (u/timing "    Query time: %T"
-                  (query/spit-top-n-groups-of-size-x
-                   m 15 n (format "query-results/%s.query.%s" f n)))))))
+    (System/gc)
+    (println "Model" f)
+    (let [m (u/timing "    Load time: %T" (load-model (str "models/" f)))
+          size (count (emf/eallobjects m))]
+      (println "    Model size:" (.size (.getContents ^Resource m)) "elements")
+      (u/timing "    No. groups (%s): %R\n    Exec. time: %T"
+                (transform/make-groups-of-2! m 3) 2)
+      (u/timing "    Query time: %T"
+                (query/spit-top-n-groups-of-size-x
+                 m 15 2 (format "query-results/%s.query.%s" f 2))))))
 
+(deftest ^:imdb test-imdb-models-triples
+  (println)
+  (println "Tests on IMDb Models (Triples)")
+  (println "==============================")
+  (println)
+  (doseq [f (sort (map #(.getName ^java.io.File %)
+                       (.listFiles (java.io.File. "models"))))
+          :when (re-matches #".*\.movies(?:\.bin)?" f)]
+    (System/gc)
+    (println "Model" f)
+    (let [m (u/timing "    Load time: %T" (load-model (str "models/" f)))
+          size (count (emf/eallobjects m))]
+      (println "    Model size:" (.size (.getContents ^Resource m)) "elements")
+      (u/timing "    No. groups (%s): %R\n    Exec. time: %T"
+                (transform/make-groups-of-3! m 3) 3)
+      (u/timing "    Query time: %T"
+                (query/spit-top-n-groups-of-size-x
+                 m 15 3 (format "query-results/%s.query.%s" f 3))))))
