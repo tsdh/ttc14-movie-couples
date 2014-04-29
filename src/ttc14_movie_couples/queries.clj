@@ -78,7 +78,7 @@
 
 (defn spit-top-n-groups-of-size-x [model n x file]
   (spit-query-results (if (= x 2)
-                        (emf/eallobjects model 'Couple)
+                        (emf/eallcontents model 'Couple)
                         (filter #(== (clique-size %) x)
-                                (emf/eallobjects model 'Clique)))
+                                (emf/eallcontents model 'Clique)))
                       n file))

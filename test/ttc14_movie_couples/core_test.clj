@@ -43,7 +43,7 @@
     (System/gc)
     (println "Model" f)
     (let [m (u/timing "    Load time: %T" (load-model (str "models/" f)))
-          size (count (emf/eallobjects m))]
+          size (count (emf/eallcontents m))]
       (println "    Model size:" (.size (.getContents ^Resource m)) "elements")
       (u/timing "    No. groups (%s): %R\n    Exec. time: %T"
                 (transform/make-groups-of-2! m 3) 2)
@@ -62,7 +62,7 @@
     (System/gc)
     (println "Model" f)
     (let [m (u/timing "    Load time: %T" (load-model (str "models/" f)))
-          size (count (emf/eallobjects m))]
+          size (count (emf/eallcontents m))]
       (println "    Model size:" (.size (.getContents ^Resource m)) "elements")
       (u/timing "    No. groups (%s): %R\n    Exec. time: %T"
                 (transform/make-groups-of-3! m 3) 3)

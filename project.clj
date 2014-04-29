@@ -5,7 +5,7 @@
             :url "http://www.gnu.org/licenses/gpl.html"
             :distribution :repo}
   :dependencies [[org.clojure/clojure "1.6.0"]
-                 [funnyqt "0.20.1"]]
+                 [funnyqt "0.20.5"]]
   :profiles {:dev
              {:dependencies
               [[criterium "0.4.3"]
