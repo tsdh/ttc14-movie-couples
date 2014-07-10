@@ -313,13 +313,13 @@ of template.  In this quasi-quoted form, values computed at compile-time can be
 inserted using the \emph{unquote} (\code|~|) and \emph{unquote-splicing}
 (\code|~@|) operators to fill the template's variable parts.  What the macro
 above generates is a \code|(ip/defrule ...)| FunnyQT in-place transformation
-rule definition where the rule's name is \code|make-groups-of-<n>!| (line 22),
-where two special rule options are set (line 23), which has two parameters
-\code|model| and \code|c| (line 24), a complex pattern involving constraints
+rule definition where the rule's name is \code|make-groups-of-<n>!| (line 21),
+where two special rule options are set (line 22), which has two parameters
+\code|model| and \code|c| (line 23), a complex pattern involving constraints
 using the \code|person-count|, \code|movie-count|, and \code|n-common-movies?|
-functions defined above (lines 25-39), and which finally contains an action to
+functions defined above (lines 24-38), and which finally contains an action to
 be applied to found matches that creates either a \code|Couple| or a
-\code|Clique| and sets the common movies and average rating (lines 40-43).
+\code|Clique| and sets the common movies and average rating (lines 39-42).
 
 The last part of the implementation of the tasks 2 and 3 and the extension
 tasks 2 and 3 is to actually invoke the macro to create the transformation
