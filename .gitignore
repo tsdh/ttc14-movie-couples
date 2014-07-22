@@ -19,3 +19,12 @@ doc/*.blg
 doc/*.log
 doc/*.out
 doc/*.synctex.gz
+presentation/auto/
+presentation/movies.aux
+presentation/movies.log
+presentation/movies.nav
+presentation/movies.out
+presentation/movies.snm
+presentation/movies.synctex.gz
+presentation/movies.toc
+presentation/movies.vrb
