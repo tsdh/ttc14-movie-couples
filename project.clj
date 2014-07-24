@@ -5,14 +5,15 @@
             :url "http://www.gnu.org/licenses/gpl.html"
             :distribution :repo}
   :dependencies [[org.clojure/clojure "1.6.0"]
-                 [funnyqt "0.20.5"]]
+                 [funnyqt "0.21.2"]]
   :profiles {:dev
              {:dependencies
               [[criterium "0.4.3"]
                [org.clojure/tools.namespace "0.2.4"]]}}
   :test-selectors {:imdb      :imdb
+                   :couples   :couples
                    :synthetic :synthetic
-                   :cliques   :cliques}
+                   :triples   :triples}
   :jvm-opts ^:replace ["-Xms4G" "-Xmx4G"]
   :source-paths ["src/" "../imdb2emf/src/"]
   :global-vars {*warn-on-reflection* true

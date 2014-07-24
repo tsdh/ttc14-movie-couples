@@ -32,7 +32,7 @@
                   (query/spit-top-n-groups-of-size-x
                    m 15 n (format "query-results/synth-%s.query.%s" N n)))))))
 
-(deftest ^:imdb test-imdb-models-couples
+(deftest ^:imdb ^:couples test-imdb-models-couples
   (println)
   (println "Tests on IMDb Models (Couples)")
   (println "==============================")
@@ -51,7 +51,7 @@
                 (query/spit-top-n-groups-of-size-x
                  m 15 2 (format "query-results/%s.query.%s" f 2))))))
 
-(deftest ^:imdb test-imdb-models-triples
+(deftest ^:imdb ^:triples test-imdb-models-triples
   (println)
   (println "Tests on IMDb Models (Triples)")
   (println "==============================")

@@ -38,8 +38,7 @@
     `(ip/defrule ~(symbol (str "make-groups-of-" n "!"))
        {:forall true :no-result-vec true}
        [~'model ~'c]
-       [~'m<Movie>
-        :when (>= (person-count ~'m) ~n)
+       [~'m<Movie> :when (>= (person-count ~'m) ~n)
         ~@(mapcat (fn [i]
                     (let [ps (nth psyms i)]
                       `[~'m -<persons>-> ~ps
@@ -53,12 +52,17 @@
         :when-let [~'cms (n-common-movies? ~'c ~@psyms)]
         :as [~'cms ~@psyms]
         :distinct]
-       (emf/ecreate! ~'model ~@(if (= n 2)
-                                 `['Couple :p1 ~(first psyms) :p2 ~(second psyms)]
-                                 `['Clique :persons [~@psyms]])
-                     :commonMovies ~'cms :avgRating (avg-rating ~'cms)))))
+       (emf/ecreate! ~'model ~(if (= n 2)
+                                `'Couple
+                                `'Clique)
+                     ~(if (= n 2)
+                        `{:commonMovies ~'cms :avgRating (avg-rating ~'cms)
+                          :p1 ~(first psyms) :p2 ~(second psyms)}
+                        `{:commonMovies ~'cms :avgRating (avg-rating ~'cms)
+                          :persons [~@psyms]})))))
 
 (define-group-rule 2)
 (define-group-rule 3)
 (define-group-rule 4)
 (define-group-rule 5)
+
