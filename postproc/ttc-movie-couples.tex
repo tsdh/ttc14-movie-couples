@@ -34,9 +34,8 @@
 \label{sec:introduction}
 
 This paper describes a solution of the TTC 2014 Movie Database
-Case~\cite{movies-case-desc}.  All core and extension tasks have been solved,
-and the solution also scales well with large models.  The solution project is
-available on
+Case~\cite{movies-case-desc}.  All core and extension tasks have been solved.
+The solution project is available on
 Github\footnote{\url{https://github.com/tsdh/ttc14-movie-couples}}, and it is
 set up for easy reproduction on the
 SHARE\footnote{\url{http://is.ieis.tue.nl/staff/pvgorp/share/}} image
@@ -59,18 +58,6 @@ tasks.  For example, the pattern matching, in-place transformation,
 model-to-model transformation, and bidirectional model transformation
 constructs are provided in terms of a small, task-oriented DSL each.
 
-FunnyQT currently supports querying and transforming
-EMF~\cite{Steinberg2008EEM} and
-JGraLab\footnote{\url{http://jgralab.uni-koblenz.de}} TGraph models, and
-support for other modeling frameworks can be added without touching FunnyQT's
-internals.  For both EMF and JGraLab, there is one FunnyQT core namespace
-(i.e., \emph{funnyqt.emf} and \emph{funnyqt.tg}) providing functions for
-accessing and manipulation models of that kind using the framework's
-terminology and giving access to any feature provided by that framework.  These
-core namespaces are complemented by a namespace \emph{funnyqt.generic} which
-provides functions for functionality available on all frameworks in a generic,
-framework-agnostic manner.
-
 
 \section{Solution Description}
 \label{sec:solution-description}
@@ -80,8 +67,8 @@ core and extension tasks are going to be explained.  In the listings given in
 the following, all function calls are shown in a namespace-qualified form to
 make it explicit in which Clojure or FunnyQT namespace those functions are
 defined.  Clojure allows to define short aliases for used namespaces in order
-to allow qualification while still being concise, e.g., \code|(emf/eget o :x)|
-where \code|emf| is an alias for the namespace \code|funnyqt.emf| and
+to allow qualification while still being concise, e.g., \code|(emf/eget o
+:prop)| where \code|emf| is an alias for the namespace \code|funnyqt.emf| and
 \code|eget| is the function name.  All functions with namespace aliases
 \code|emf|, \code|ip|, \code|poly|, and \code|u| are FunnyQT functions, all
 others are either core Clojure or Clojure standard library functions, or
@@ -99,12 +86,9 @@ an integer parameter \code|i| from which the movie ratings and actor names are
 derived.
 
 The function \code|create-positive!|\footnote{The \code|^:private| is a
-  metadata annotation declaring that this function is private, i.e., it is not
-  accessible from another namespace.} creates five movies, three actors, and
-two actresses.  The persons' \textsf{movies} references are set as requested by
-the case description, i.e., every persons acts in the second, third, and fourth
-movie, and the first two persons additionally act in the first movie while the
-last two persons additionally act in the fifth movie.
+  metadata annotation declaring that this function is private, i.e.,
+  inaccessible from another namespace.} creates 5 movies, 3 actors, and 2
+actresses and links them as requested.
 
 \begin{clojurecode}
 (defn ^:private create-positive! [model i]
@@ -124,26 +108,25 @@ The \code|create-negative!| function is defined similarly, so not printed in
 this paper.
 
 The last function \code|create-example| is the entry point to the generation of
-synthetic test models.  It receives an integer parameter \code|n|, creates a
-new model (a resource in EMF parlance), and then invokes the
-\code|create-positive!| and \code|create-negative!| rules \code|n| times with
-the new model and values for \code|i| from 0 to \code|n-1|.  Finally, the new
-model populated with the movies and actors is returned.
+synthetic test models.
 
-\begin{clojurecode*}{firstnumber=23}
+\begin{clojurecode}
 (defn create-example [n]
   (let [model (emf/new-resource)]
     (dotimes [i n]
       (create-positive! model i)
       (create-negative! model i))
     model))
-\end{clojurecode*}
+\end{clojurecode}
 
-The \code|create-example| function is invoked by the benchmark runner with the
-\code|n|-values 1000, 2000, 3000, 4000, 5000, 10000, 50000, 100000, and 200000.
+It receives an integer parameter \code|n|, creates a new model (a resource in
+EMF parlance), and then invokes the \code|create-positive!| and
+\code|create-negative!| rules \code|n| times with the new model and values for
+\code|i| from 0 to \code|n-1|.  Finally, the new model populated with the
+movies and actors is returned.
 
 
-\subsection{Task 2 \& 3 and Extension Task 2 \& 3: Finding Couples/Cliques \&
+\subsection{Task 2/3 and Extension Task 2/3: Finding Couples/Cliques and
   Compute Average Rankings}
 \label{sec:task-2:finding-groups}
 
@@ -385,8 +368,7 @@ will make the rule only return the number of matches it has processed in order
 to save some memory.
 
 
-\subsection{Extension Task 1 \& Extension Task 4: Compute Top-15 Couples \&
-  Cliques}
+\subsection{Extension Task 1/4: Compute Top-15 Couples/Cliques}
 \label{sec:ext-task-1:top-15}
 
 The case description demands for the Extension Tasks 1 and 4 the computation of
@@ -528,7 +510,7 @@ groups order.
 Those where the actually important parts for solving the top-15 tasks.
 
 
-\section{Evaluation}
+\section{Evaluation and Conclusion}
 \label{sec:evaluation}
 
 With respect to correctness, the FunnyQT solution computes the exact same
@@ -574,23 +556,11 @@ of the group plus their set of common movies) and then generate one new couple
 or clique element for each match.  This means that the original model, all
 matches, and also all new elements reside in memory at the same time.
 
-One could sacrifice a bit of performance for better memory-efficiency by not
-including the set of common movies already in the matches, but instead
-re-compute it in the rule's action creating the couple or clique elements.
-
-
-\section{Conclusion}
-\label{sec:conclusion}
-
-In this paper, the FunnyQT solution to the TTC 2014 Movie Database Case has
-been discussed.  It correctly solves all core and extension tasks, and its
-performance is good (second-best in the contest) due to the fact that FunnyQT
-is able to perform pattern matching in parallel on multi-core systems.
-
-Also, the solution is concise.  All in all, it consists of 152 lines of code
-(including boilerplace code like namespace definitions) in three source files,
-one for the generation of the synthetic test models (30 LOC), one for the
-couple and cliques rules (52 LOC), and one for the queries (70 LOC).
+Another strong point of the solution is its conciseness.  All in all, it
+consists of 152 lines of code (including boilerplace code like namespace
+definitions) in three source files, one for the generation of the synthetic
+test models (30 LOC), one for the couple and cliques rules (52 LOC), and one
+for the queries (70 LOC).
 
 
 \bibliographystyle{eptcs}
