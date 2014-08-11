@@ -83,34 +83,26 @@ description~\cite{movies-case-desc} illustrates the task with Henshin rules.
 Since the rules actually don't match anything but simply create new elements in
 the model, we have implemented them as plain functions receiving the model and
 an integer parameter \code|i| from which the movie ratings and actor names are
-derived.
-
-The function \code|create-positive!|\footnote{The \code|^:private| is a
-  metadata annotation declaring that this function is private, i.e.,
+derived.  The function \code|create-positive!|\footnote{The \code|^:private| is
+  a metadata annotation declaring that this function is private, i.e.,
   inaccessible from another namespace.} creates 5 movies, 3 actors, and 2
 actresses and links them as requested.
 
 \begin{clojurecode}
 (defn ^:private create-positive! [model i]
-  (let [m1 (emf/ecreate! model 'Movie :rating (+ 0.0 (* 10 i)))
-        m2 (emf/ecreate! model 'Movie :rating (+ 1.0 (* 10 i)))
-        m3 (emf/ecreate! model 'Movie :rating (+ 2.0 (* 10 i)))
-        m4 (emf/ecreate! model 'Movie :rating (+ 3.0 (* 10 i)))
-        m5 (emf/ecreate! model 'Movie :rating (+ 4.0 (* 10 i)))]
-    (emf/ecreate! model 'Actor   :name (str "a" (* 10 i))       :movies [m1 m2 m3 m4])
-    (emf/ecreate! model 'Actor   :name (str "a" (+ 1 (* 10 i))) :movies [m1 m2 m3 m4])
-    (emf/ecreate! model 'Actor   :name (str "a" (+ 2 (* 10 i))) :movies [m2 m3 m4])
-    (emf/ecreate! model 'Actress :name (str "a" (+ 3 (* 10 i))) :movies [m2 m3 m4 m5])
-    (emf/ecreate! model 'Actress :name (str "a" (+ 4 (* 10 i))) :movies [m2 m3 m4 m5])))
-\end{clojurecode}
+  (let [m1 (emf/ecreate! model 'Movie {:rating (+ 0.0 (* 10 i))})
+        m2 (emf/ecreate! model 'Movie {:rating (+ 1.0 (* 10 i))})
+        m3 (emf/ecreate! model 'Movie {:rating (+ 2.0 (* 10 i))})
+        m4 (emf/ecreate! model 'Movie {:rating (+ 3.0 (* 10 i))})
+        m5 (emf/ecreate! model 'Movie {:rating (+ 4.0 (* 10 i))})]
+    (emf/ecreate! model 'Actor   {:name (str "a" (* 10 i))       :movies [m1 m2 m3 m4]})
+    (emf/ecreate! model 'Actor   {:name (str "a" (+ 1 (* 10 i))) :movies [m1 m2 m3 m4]})
+    (emf/ecreate! model 'Actor   {:name (str "a" (+ 2 (* 10 i))) :movies [m2 m3 m4]})
+    (emf/ecreate! model 'Actress {:name (str "a" (+ 3 (* 10 i))) :movies [m2 m3 m4 m5]})
+    (emf/ecreate! model 'Actress {:name (str "a" (+ 4 (* 10 i))) :movies [m2 m3 m4 m5]})))
 
-The \code|create-negative!| function is defined similarly, so not printed in
-this paper.
+(defn ^:private create-positive! [model i] ...)
 
-The last function \code|create-example| is the entry point to the generation of
-synthetic test models.
-
-\begin{clojurecode}
 (defn create-example [n]
   (let [model (emf/new-resource)]
     (dotimes [i n]
@@ -119,11 +111,15 @@ synthetic test models.
     model))
 \end{clojurecode}
 
-It receives an integer parameter \code|n|, creates a new model (a resource in
-EMF parlance), and then invokes the \code|create-positive!| and
-\code|create-negative!| rules \code|n| times with the new model and values for
-\code|i| from 0 to \code|n-1|.  Finally, the new model populated with the
-movies and actors is returned.
+The \code|create-negative!| function is defined similarly, so it is elided for
+brevity.
+
+The function \code|create-example| is the entry point to the generation of
+synthetic test models.  It receives an integer parameter \code|n|, creates a
+new model (a resource in EMF parlance), and then invokes the
+\code|create-positive!| and \code|create-negative!| rules \code|n| times with
+the new model and values for \code|i| from 0 to \code|n-1|.  Finally, the new
+model populated with the movies and actors is returned.
 
 
 \subsection{Task 2/3 and Extension Task 2/3: Finding Couples/Cliques and
@@ -377,13 +373,10 @@ the top-15 groups according to the criteria
 \item \emph{average rating of common movies}, and
 \item \emph{number of common movies}.
 \end{inparaenum}
-
-Whenever there's a tie between two groups according to the current criterium of
-interest, the case description allows for an arbitrary but stable order.  The
-FunnyQT solution does a bit more: if there's a tie between two groups for the
-current criterium, the respective other criterium is used to cut it.  If that
-doesn't suffice, i.e., both groups have the same average rating and number of
-common movies, the names of the group's members are compared as a fallback.
+The FunnyQT solution does a bit more: if there's a tie between two groups for
+the current criterium, the respective other criterium is used to cut it.  If
+that doesn't suffice, i.e., both groups have the same average rating and number
+of common movies, the names of the group's members are compared as a fallback.
 Since the person names are unique in the models, there is no chance that no
 distinction can be made.
 
@@ -395,30 +388,21 @@ be sorted before the second, a positive integer if the first object should be
 sorted after the second item, and zero if both objects are equal with respect
 to sorting order.
 
-The comparator for the average rating is shown in the following listing.
+The comparators for the average rating and number of common movies are shown in
+the next listing.
 
 \begin{clojurecode}
 (defn rating-comparator [a b]
   (compare (emf/eget b :avgRating) (emf/eget a :avgRating)))
-\end{clojurecode}
-
-As every comparator, it gets two objects \code|a| and \code|b| (here, two
-couples or cliques) and compares them.  \code|compare| is the standard Clojure
-comparator which works for objects of any class implementing the
-\code|java.lang.Comparable| interface.  Since we compare the average rating of
-\code|b| with the average rating of \code|a|, a descending order is defined.
-
-The comparator for the number of common movies is shown below.
-
-\begin{clojurecode}
 (defn common-movies-comparator [a b]
   (compare (.size ^java.util.Collection (emf/eget-raw b :commonMovies))
            (.size ^java.util.Collection (emf/eget-raw a :commonMovies))))
 \end{clojurecode}
 
-Like with the \code|person-count| and \code|movie-count| functions, we use
-type-hints to call the Java method \code|Collection.size()| directly on the
-\code|EList| holding the common movies of the two groups \code|a| and~\code|b|.
+As every comparator, they get two objects \code|a| and \code|b| (here, two
+couples or cliques) and compares them.  \code|compare| is the standard Clojure
+comparator which works for objects of any class implementing the
+\code|java.lang.Comparable| interface.
 
 For the next comparator that compares the two groups' actors according to their
 names, we need some helper functions first.  Polyfns are FunnyQT's way to
@@ -437,14 +421,13 @@ metamodel types can be added using \code|defpolyfn|.
 
 In line 1, the polyfn \code|actors| with one parameter \code|group| is
 declared.  Its intent is to return a collection of all actors and actresses
-that are part of the given group.
-
-In lines 2-3, one implementation for elements of metamodel type \code|Couple|
-is added.  It returns a vector of two elements: the person in the couple's
-\code|p1| reference, and the person in the couple's \code|p2| reference.  Lines
-4-5 define another implementation for elements of metamodel type \code|Clique|.
-Here, the contents of the group's \code|persons| reference is returned which
-already is the collection of all the clique's members.
+that are part of the given group.  In lines 2-3, one implementation for
+elements of metamodel type \code|Couple| is added.  It returns a vector of two
+elements: the person in the couple's \code|p1| reference, and the person in the
+couple's \code|p2| reference.  Lines 4-5 define another implementation for
+elements of metamodel type \code|Clique|.  Here, the contents of the group's
+\code|persons| reference is returned which already is the collection of all the
+clique's members.
 
 Using this polyfn, the comparator for ordering groups according to the names of
 their members can be defined like shown in the next listing.
@@ -501,13 +484,9 @@ So finally, here are the two top-15 groups functions.
 sorts them by the combined comparator first taking the average rating into
 account, then the number of common movies, and eventually the names of the
 groups' actors if neither of the two former comparators could decide on the two
-groups order.
-
-\code|group-by-common-movies| is defined similar except that the
+groups order.  \code|group-by-common-movies| is defined similar except that the
 \code|common-movies-comparator| is applied first instead of the
 \code|rating-comparator|.
-
-Those where the actually important parts for solving the top-15 tasks.
 
 
 \section{Evaluation and Conclusion}
@@ -525,7 +504,8 @@ attributes and references including the computation of the average ratings.
 The benchmarks were run on a GNU/Linux virtual machine with eight 2.8GHz cores
 and 32GB of RAM, 30GB of which were dedicated to the JVM process.
 
-\begin{table}
+\begin{table}[h!tb]
+  \footnotesize
   \centering
   \begin{tabular}{| l | r | r |}
     \hline
