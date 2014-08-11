@@ -52,9 +52,7 @@
         :when-let [~'cms (n-common-movies? ~'c ~@psyms)]
         :as [~'cms ~@psyms]
         :distinct]
-       (emf/ecreate! ~'model ~(if (= n 2)
-                                `'Couple
-                                `'Clique)
+       (emf/ecreate! ~'model ~(if (= n 2) `'Couple `'Clique)
                      ~(if (= n 2)
                         `{:commonMovies ~'cms :avgRating (avg-rating ~'cms)
                           :p1 ~(first psyms) :p2 ~(second psyms)}

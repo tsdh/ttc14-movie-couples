@@ -5,11 +5,11 @@
             :url "http://www.gnu.org/licenses/gpl.html"
             :distribution :repo}
   :dependencies [[org.clojure/clojure "1.6.0"]
-                 [funnyqt "0.21.3"]]
+                 [funnyqt "0.22.0"]]
   :profiles {:dev
              {:dependencies
               [[criterium "0.4.3"]
-               [org.clojure/tools.namespace "0.2.4"]]}}
+               [org.clojure/tools.namespace "0.2.5"]]}}
   :test-selectors {:imdb      :imdb
                    :couples   :couples
                    :synthetic :synthetic
