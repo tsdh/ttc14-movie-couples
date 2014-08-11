@@ -1,0 +1,696 @@
+\documentclass[submission]{eptcs}
+\providecommand{\event}{TTC 2014}
+
+\usepackage[T1]{fontenc}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{paralist}
+\usepackage[cache]{minted}
+\newminted{clojure}{fontsize=\fontsize{8}{8},linenos,numbersep=3pt}
+\newmintinline{clojure}{fontsize=\fontsize{8}{8}}
+\newcommand{\code}{\clojureinline}
+
+\title{Solving the TTC Movie Database Case with FunnyQT}
+\author{Tassilo Horn
+  \institute{Institute for Software Technology, University Koblenz-Landau, Germany}
+  \email{horn@uni-koblenz.de}}
+
+\def\titlerunning{Solving the TTC Movie Database Case with FunnyQT}
+\def\authorrunning{T. Horn}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+  FunnyQT is a model querying and model transformation library for the
+  functional Lisp-dialect Clojure providing a rich and efficient querying and
+  transformation API.  This paper describes the FunnyQT solution to the TTC
+  2014 Movie Database transformation case.  All core tasks and all extension
+  tasks have been solved.
+\end{abstract}
+
+
+\section{Introduction}
+\label{sec:introduction}
+
+This paper describes a solution of the TTC 2014 Movie Database
+Case~\cite{movies-case-desc}.  All core and extension tasks have been solved,
+and the solution also scales well with large models.  The solution project is
+available on
+Github\footnote{\url{https://github.com/tsdh/ttc14-movie-couples}}, and it is
+set up for easy reproduction on the
+SHARE\footnote{\url{http://is.ieis.tue.nl/staff/pvgorp/share/}} image
+\texttt{Ubuntu12LTS\_TTC14\_64bit\_FunnyQT4.vdi}.
+
+The solution is implemented using FunnyQT~\cite{Horn2013MQWFQ} which is a model
+querying and transformation library for the functional Lisp dialect
+Clojure\footnote{\url{http://clojure.org}}.  Queries and transformations are
+plain Clojure programs using the features provided by the FunnyQT API.  This
+API is structured into several task-specific sub-APIs/namespaces, e.g., there
+is a namespace \emph{funnyqt.in-place} containing constructs for writing
+in-place transformations, a namespace \emph{funnyqt.model2model} containing
+constructs for model-to-model transformations, a namespace \emph{funnyqt.bidi}
+containing constructs for bidirectional transformations, and so forth.
+
+As a Lisp dialect, Clojure provides strong metaprogramming capabilities that
+are exploited by FunnyQT in order to define several \emph{embedded
+  domain-specific languages} (DSL, \cite{book:Fowler2010DSL}) for different
+tasks.  For example, the pattern matching, in-place transformation,
+model-to-model transformation, and bidirectional model transformation
+constructs are provided in terms of a small, task-oriented DSL each.
+
+FunnyQT currently supports querying and transforming
+EMF~\cite{Steinberg2008EEM} and
+JGraLab\footnote{\url{http://jgralab.uni-koblenz.de}} TGraph models, and
+support for other modeling frameworks can be added without touching FunnyQT's
+internals.  For both EMF and JGraLab, there is one FunnyQT core namespace
+(i.e., \emph{funnyqt.emf} and \emph{funnyqt.tg}) providing functions for
+accessing and manipulation models of that kind using the framework's
+terminology and giving access to any feature provided by that framework.  These
+core namespaces are complemented by a namespace \emph{funnyqt.generic} which
+provides functions for functionality available on all frameworks in a generic,
+framework-agnostic manner.
+
+
+\section{Solution Description}
+\label{sec:solution-description}
+
+In this section, the complete transformation and query specifications for all
+core and extension tasks are going to be explained.  In the listings given in
+the following, all function calls are shown in a namespace-qualified form to
+make it explicit in which Clojure or FunnyQT namespace those functions are
+defined.  Clojure allows to define short aliases for used namespaces in order
+to allow qualification while still being concise.  Table~\ref{tab:namespaces}
+gives an overview of all namespaces used by the solution, and the aliases used
+for accessing them.
+
+\begin{table}[h!t]
+  \centering
+  \begin{tabular}{| l | l | l |}
+    \hline
+    \textbf{Alias} & \textbf{Namespace} & \textbf{Description}\\
+    \hline
+    \textsf{emf}  & \textsf{funnyqt.emf}      & Core EMF API\\
+    \textsf{gen}  & \textsf{funnyqt.generic}  & Generic model access functions\\
+    \textsf{io}   & \textsf{clojure.java.io}  & File IO functions\\
+    \textsf{ip}   & \textsf{funnyqt.in-place} & In-place transformation API\\
+    \textsf{poly} & \textsf{funnyqt.polyfns}  & Polymorphic function API\\
+    \textsf{set}  & \textsf{clojure.set}      & Set functions (e.g., union, intersection,...)\\
+    \textsf{str}  & \textsf{clojure.string}   & String utility functions\\
+    \textsf{u}    & \textsf{funnyqt.utils}    & Utility functions (e.g., error handling)\\
+    \hline
+  \end{tabular}
+  \caption{Used Clojure and FunnyQT namespaces with their aliases}
+  \label{tab:namespaces}
+\end{table}
+
+All function calls that are not qualified with an alias are calls to functions
+in the \emph{clojure.core} namespace which is available in any other namespace
+by default.
+
+\subsection{Task 1: Generating Test Data}
+\label{sec:task-1:generating-test-data}
+
+The first task is generating test data.  The case
+description~\cite{movies-case-desc} illustrates the task with Henshin rules.
+Since the rules actually don't match anything but simply create new elements in
+the model, we have implemented them as plain functions receiving the model and
+an integer parameter \code|i| from which the movie ratings and actor names are
+derived.
+
+The function \code|create-positive!|\footnote{The \code|^:private| is a
+  metadata annotation declaring that this function is private, i.e., it is not
+  accessible from another namespace.} creates five movies, three actors, and
+two actresses.  The persons' \textsf{movies} references are set as requested by
+the case description, i.e., every persons acts in the second, third, and fourth
+movie, and the first two persons additionally act in the first movie while the
+last two persons additionally act in the fifth movie.
+
+Forward-looking to task 2, every invocation of the \code|create-positive!|
+function creates \({5 \choose 2} = 10\) couples with three common movies.
+
+\begin{clojurecode}
+(defn ^:private create-positive! [model i]
+  (let [m1 (emf/ecreate! model 'Movie :rating (+ 0.0 (* 10 i)))
+        m2 (emf/ecreate! model 'Movie :rating (+ 1.0 (* 10 i)))
+        m3 (emf/ecreate! model 'Movie :rating (+ 2.0 (* 10 i)))
+        m4 (emf/ecreate! model 'Movie :rating (+ 3.0 (* 10 i)))
+        m5 (emf/ecreate! model 'Movie :rating (+ 4.0 (* 10 i)))]
+    (emf/ecreate! model 'Actor   :name (str "a" (* 10 i))       :movies [m1 m2 m3 m4])
+    (emf/ecreate! model 'Actor   :name (str "a" (+ 1 (* 10 i))) :movies [m1 m2 m3 m4])
+    (emf/ecreate! model 'Actor   :name (str "a" (+ 2 (* 10 i))) :movies [m2 m3 m4])
+    (emf/ecreate! model 'Actress :name (str "a" (+ 3 (* 10 i))) :movies [m2 m3 m4 m5])
+    (emf/ecreate! model 'Actress :name (str "a" (+ 4 (* 10 i))) :movies [m2 m3 m4 m5])))
+\end{clojurecode}
+
+The \code|create-negative!| function is defined similarly.  It also creates
+five movies and five persons assigning ratings for the former and names for the
+latter.  However, every pair of two of those persons have acted together in at
+most two movies, so there is no couple to be found in task 2 here.
+
+\begin{clojurecode*}{firstnumber=12}
+(defn ^:private create-negative! [model i]
+  (let [m1 (emf/ecreate! model 'Movie :rating (+ 5.0 (* 10 i)))
+        m2 (emf/ecreate! model 'Movie :rating (+ 6.0 (* 10 i)))
+        m3 (emf/ecreate! model 'Movie :rating (+ 7.0 (* 10 i)))
+        m4 (emf/ecreate! model 'Movie :rating (+ 8.0 (* 10 i)))
+        m5 (emf/ecreate! model 'Movie :rating (+ 9.0 (* 10 i)))]
+    (emf/ecreate! model 'Actor   :name (str "a" (+ 5 (* 10 i))) :movies [m1 m2])
+    (emf/ecreate! model 'Actor   :name (str "a" (+ 6 (* 10 i))) :movies [m1 m2 m3])
+    (emf/ecreate! model 'Actress :name (str "a" (+ 7 (* 10 i))) :movies [m2 m3 m4])
+    (emf/ecreate! model 'Actress :name (str "a" (+ 8 (* 10 i))) :movies [m3 m4 m5])
+    (emf/ecreate! model 'Actress :name (str "a" (+ 9 (* 10 i))) :movies [m4 m5])))
+\end{clojurecode*}
+
+The last function \code|create-example| is the entry point to the generation of
+synthetic test models.  It receives an integer parameter \code|n|, creates a
+new model (a resource in EMF parlance), and then invokes the
+\code|create-positive!| and \code|create-negative!| rules \code|n| times with
+the new model and values for \code|i| from 0 to \code|n-1|.  Finally, the new
+model populated with the movies and actors is returned.
+
+\begin{clojurecode*}{firstnumber=23}
+(defn create-example [n]
+  (let [model (emf/new-resource)]
+    (dotimes [i n]
+      (create-positive! model i)
+      (create-negative! model i))
+    model))
+\end{clojurecode*}
+
+The \code|create-example| function is invoked by the benchmark runner with the
+\code|n|-values 1000, 2000, 3000, 4000, 5000, 10000, 50000, 100000, and 200000.
+
+\subsection{Task 2 \& 3 and Extension Task 2 \& 3: Finding Couples/Cliques \&
+  Compute Average Rankings}
+\label{sec:task-2:finding-groups}
+
+As the case description already mentions, the \emph{Finding Cliques} task is a
+generalization of the \emph{Finding Couples} task, so the FunnyQT solution
+solves both one go.  For finding cliques of arbitrary sizes \(n \geq 3\),
+a higher-order transformation should be defined that creates a transformation
+rule for that \(n\).
+The FunnyQT solution also allows for \(n = 2\)
+and deals with the fact that in this case, \code|Couple| elements should be
+created rather than \code|Clique| elements.
+
+Also, the \emph{computation of the average rankings} of a couple's or clique's
+common movies is done while creating the \code|Couple| or \code|Clique| element
+instead of doing it separately in a further step.
+
+The higher-order transformation generating a FunnyQT in-place transformation
+rule for a given \(n \geq 2\)
+is a Clojure \emph{macro}.  A macro is a function which is executed at
+compile-time by the Clojure compiler.  It receives code passed to it as
+arguments, processes it, and returns new code that takes the place of it's
+call.  This new code is called the macro's \emph{expansion}.  Because like all
+Lisps, Clojure is \emph{homoiconic}, i.e., Clojure code is represented using
+Clojure datastructures\footnote{In other words, Lisp and Clojure do not
+  separate concrete and abstract syntax.} (literals, symbols, lists, vectors),
+a macro is essentially a transformation on the abstract syntax tree of the
+Clojure code that's passed to the macro.
+
+Before discussing the rule generation macro, a few helper functions are going
+to be discussed.  Those will be used as constraints in the patterns of the
+generated rules.
+
+\begin{clojurecode}
+(defn movie-count [p]
+  (.size ^java.util.Collection (emf/eget-raw p :movies)))
+
+(defn person-count [m]
+  (.size ^java.util.Collection (emf/eget-raw m :persons)))
+
+(defn movie-set [p]
+  (into #{} (emf/eget-raw p :movies)))
+\end{clojurecode}
+
+The function \code|movie-count| gets some \code|Person| element \code|p| and
+returns the number of movies that this person has acted in.
+\code|emf/eget-raw| is a function that returns the value of some element's
+property without any conversion\footnote{The usual FunnyQT EMF property getter
+  \code|emf/eget| coerces Java collections to immutable, persistent Clojure
+  collections.  Since we are only interested in the size, this coercion would
+  be superfluous overhead.}, e.g., here an EMF \code|EList| object is returned
+and its \code|size()| method (defined in the EMF Java API) is invoked.  The
+syntax \code|^java.util.Collection| is a type hint which allows the Clojure
+compiler to generate byte-code for a direct rather than a reflective Java
+method call (\code|EList| implements the \code|Collection| interface which
+declares the method \code|size()|).
+
+Similarly, \code|person-count| returns the number of persons that acted in a
+given movie \code|m|.
+
+Lastly, \code|movie-set| gets a person element \code|p| and returns the movies
+that person acted in as a set.  \code|#{}| is the empty Clojure set literal.
+
+The \code|avg-rating| function shown in the next listing gets a collection of
+movie elements and returns their average rating.  The higher-order function
+\code|map| takes a function and a collection and applies the function to each
+element of the collection returning the sequence of results, which is the
+sequence of the given movies ratings here.  \code|reduce| then aggregates the
+sequence using \code|+|, i.e., it computes the sum of all ratings.  Finally,
+this sum is divided by the number of given movies.
+
+\begin{clojurecode*}{firstnumber=9}
+(defn avg-rating [movies]
+  (/ (reduce + (map #(emf/eget % :rating) movies))
+     (count movies)))
+\end{clojurecode*}
+
+The function \code|n-common-movies?| printed in the next listing gets an
+integer \code|n|, a person element \code|p|, and additional person elements
+\code|more|\footnote{The Clojure varargs syntax \code|& els| is similar to
+  Java's \code|Type... els| syntax.}.  If all given persons act together in at
+least \code|n| movies, the set of common movies is returned.  Otherwise,
+\code|nil| is returned.  Since in Clojure the values \code|nil| and
+\code|false| are falsy while every other value is truthy, this function can act
+as a predicate and still return more information, i.e., the common movies, in
+the positive case.
+
+\begin{clojurecode*}{firstnumber=12}
+(defn n-common-movies? [n p & more]
+  (loop [common (movie-set p), more more]
+    (when (>= (count common) n)
+      (if (seq more)
+        (recur (set/intersection common (movie-set (first more)))
+               (rest more))
+        common))))
+\end{clojurecode*}
+
+The next listings shows the \code|define-groups-rule| macro which is the
+higher-order transformation solving the task.  It receives an parameter
+\code|n| and, as its name suggests, expands into a rule for finding couples (if
+\code|n| equals 2) or cliques of size \code|n|.
+
+\begin{clojurecode*}{firstnumber=19}
+(defmacro define-group-rule [n]
+  (let [psyms (map #(symbol (str "p" %)) (range n))]
+    `(ip/defrule ~(symbol (str "make-groups-of-" n "!"))
+       {:forall true :no-result-vec true}
+       [~'model ~'c]
+       [~'m<Movie>
+        :when (>= (person-count ~'m) ~n)
+        ~@(mapcat (fn [i]
+                    (let [ps (nth psyms i)]
+                      `[~'m -<persons>-> ~ps
+                        :when (>= (movie-count ~ps) ~'c)
+                        ~@(when-not (zero? i)
+                            `[:when (neg? (compare (emf/eget-raw ~(nth psyms (dec i)) :name)
+                                                   (emf/eget-raw ~ps :name)))])
+                        ~@(when-not (or (zero? i) (= i (dec n)))
+                            `[:when (n-common-movies? ~'c ~@(take (inc i) psyms))])]))
+                  (range n))
+        :when-let [~'cms (n-common-movies? ~'c ~@psyms)]
+        :as [~'cms ~@psyms]
+        :distinct]
+       (emf/ecreate! ~'model ~@(if (= n 2)
+                                 `['Couple :p1 ~(first psyms) :p2 ~(second psyms)]
+                                 `['Clique :persons [~@psyms]])
+                     :commonMovies ~'cms :avgRating (avg-rating ~'cms)))))
+\end{clojurecode*}
+
+We're not going to discuss the macro in details, however the central idea of
+the Clojure (or Lisp) macrosystem is that one defines the basic structure of
+the macro's expansion using a \emph{quasi-quoted} (backticked) form as a kind
+of template.  In this quasi-quoted form, values computed at compile-time can be
+inserted using the \emph{unquote} (\code|~|) and \emph{unquote-splicing}
+(\code|~@|) operators to fill the template's variable parts.  What the macro
+above generates is a \code|(ip/defrule ...)| FunnyQT in-place transformation
+rule definition where the rule's name is \code|make-groups-of-<n>!| (line 21),
+where two special rule options are set (line 22), which has two parameters
+\code|model| and \code|c| (line 23), a complex pattern involving constraints
+using the \code|person-count|, \code|movie-count|, and \code|n-common-movies?|
+functions defined above (lines 24-38), and which finally contains an action to
+be applied to found matches that creates either a \code|Couple| or a
+\code|Clique| and sets the common movies and average rating (lines 39-42).
+
+The last part of the implementation of the tasks 2 and 3 and the extension
+tasks 2 and 3 is to actually invoke the macro to create the transformation
+rules for couples and cliques of 3, 4, and 5 persons.
+
+\begin{clojurecode*}{firstnumber=43}
+(define-group-rule 2) ;; make-groups-of-2!: The Couples rule
+(define-group-rule 3) ;; make-groups-of-3!: The Cliques of Three rule
+(define-group-rule 4) ;; make-groups-of-4!: The Cliques of Four rule
+(define-group-rule 5) ;; make-groups-of-5!: The Cliques of Five rule
+\end{clojurecode*}
+
+Instead of discussing the rule generation macro in details, it makes more sense
+to have an in-depth look at one of its expansion like the one for \code|n|
+being 3 shown below.  A FunnyQT in-place transformation rule is defined whose
+name is \code|make-groups-of-3!|, and it gets as arguments the \code|model| on
+which it should be applied, and an integer \code|c| which determines how many
+common movies a clique of three persons needs to have.  The case description
+fixes \code|c| to 3, but with this parameter, we allow for a bit more
+generality.
+
+Lines 4 to 12 define the rule's pattern.  The structural part defines that it
+matches a \code|Movie| element \code|m| which references three \code|Person|
+elements \code|p0|, \code|p1|, and \code|p2| using its \code|persons|
+reference.
+
+Additionally, the pattern defines several constraints using the \code|:when|
+keyword.  The movie \code|m| needs to have at least three acting persons (line
+4), and all persons need to act in at least \code|c| movies (lines 5, 6, and
+9).  To avoid duplicate matches where only the order of the three person
+elements differs, the constraints in line 7 and 10 enforce a lexicographically
+ascending order of the names of the persons \code|p0|, \code|p1|, and
+\code|p2|.
+
+{\renewcommand{\theFancyVerbLine}{\textcolor{blue}{\tiny\arabic{FancyVerbLine}}}
+\begin{clojurecode}
+(ip/defrule make-groups-of-3!
+  {:forall true, :no-result-vec true}
+  [model c]
+  [m<Movie>          :when (>= (person-count m) 3)
+   m -<persons>-> p0 :when (>= (movie-count p0) c)
+   m -<persons>-> p1 :when (>= (movie-count p1) c)
+                     :when (neg? (compare (emf/eget-raw p0 :name) (emf/eget-raw p1 :name)))
+                     :when (n-common-movies? c p0 p1)
+   m -<persons>-> p2 :when (>= (movie-count p2) c)
+                     :when (neg? (compare (emf/eget-raw p1 :name) (emf/eget-raw p2 :name)))
+   :when-let [cms (n-common-movies? c p0 p1 p2)]
+   :as [cms p0 p1 p2] :distinct]
+  (emf/ecreate! model 'Clique :persons [p0 p1 p2] :commonMovies cms
+               :avgRating (avg-rating cms)))
+\end{clojurecode}
+}
+
+Furthermore, line 8 ensures that \code|p0| and \code|p1| have at least \code|c|
+common movies.  The same for the complete clique of three persons is also
+asserted in line 11, where the common movies are also bound to the variable
+\code|cms|.
+
+The constraints in lines 4, 5, 6, 8, and 9 are not really needed.  Omitting
+them would result is the very same set of matches.  However, such a FunnyQT
+pattern is syntactic sugar for a search starting at \code|Movie| elements
+\code|m| and iterating all combinations of the elements targeted by their
+\code|persons| references, so it makes sense to add constraints as early as
+possible in order to cut the search space.  Clearly, if a movie has less than 3
+actors, it can't be part of a clique of three.  Likewise, persons that acted in
+less than \code|c| movies can't be part of a clique that requires \code|c|
+common movies.  And similarly, if \code|p0| and \code|p1| do not have the
+required number of \code|c| common movies, then \code|p0|, \code|p1|, and
+\code|p2| cannot have them as well.
+
+The last line of the pattern, line 12, defines that each match should be
+represented as a vector containing the set of common movies \code|cms| and the
+three persons.  The keyword \code|:distinct| specifies that only distinct
+matches should be found.  The reason is that if some clique of three acts in
+\(x\)
+common movies, there are exactly \(x\)
+matches that differ only in the movie \code|m|.  By omitting the movie from the
+match representation and specifying that we are only interested in distinct
+matches, those duplicates are suppressed.
+
+The last two lines define the action that should be applied on matches.  A new
+\code|Clique| element is created that gets assigned the found persons with
+their common movies, and the average rating of the common movies.
+
+What has been skipped from explanation until now are the rule's options
+specified in line 2.  The usual rule application semantics are that the rule
+finds exactly one match (the one it finds first) and then applies its action on
+it.  To transform all matches in the model, one would apply the rule
+iteratively until no matches can be found anymore.  This behavior is especially
+important when a rule application generates new matches or invalidates existing
+matches.  However, in this case, neither of both is done.  After a
+\code|Clique| has been created, the movie and the three persons are still a
+valid match, so calling the rule repeatedly would create multiple \code|Clique|
+elements for the same persons.  One could use negative application conditions
+in order to forbid matches where there is a \code|Clique| already, but the
+\code|:forall| option handles the case in a more concise and efficient way.  It
+specifies that when applying the rule \emph{all} matches are searched at once,
+and then the action is applied to each of them.  On multi-core systems, FunnyQT
+automatically parallelizes this search using Java 7's \emph{ForkJoin} library.
+
+By default, such a \code|:forall| rule returns a sequence of rule application
+results (e.g., here a sequence of \code|Clique| elements).  The
+\code|:no-result-vec| option specifies that we don't need this sequence which
+will make the rule only return the number of matches it has processed in order
+to save some memory.
+
+
+\subsection{Extension Task 1 \& Extension Task 4: Compute Top-15 Couples \&
+  Cliques}
+\label{sec:ext-task-1:top-15}
+
+The case description demands for the Extension Tasks 1 and 4 the computation of
+the top-15 couples and cliques according to the criteria
+\begin{compactenum}[(a)]
+\item \emph{average rating of common movies}, and
+\item \emph{number of common movies}.
+\end{compactenum}
+
+Whenever there's a tie between two groups according to the current criterium of
+interest, the case description allows for an arbitrary but stable order.  The
+FunnyQT solution does a bit more: if there's a tie between two groups for the
+current criterium, the respective other criterium is used to cut it.  If that
+doesn't suffice, i.e., both groups have the same average rating and number of
+common movies, the names of the group's members are compared as a fallback.
+Since the person names are unique in the models, there is no chance that no
+distinction can be made.
+
+The implementation is quite simple in that the sequence of all \code|Couple|
+elements (or all \code|Clique| elements of a given size) are sorted using some
+comparator.  Similar to Java, a comparator in Clojure is a function that
+receives two objects and returns a negative integer if the first object should
+be sorted before the second, a positive integer if the first object should be
+sorted after the second item, and zero if both objects are equal with respect
+to sorting order.
+
+The comparator for the average rating is shown in the following listing.
+
+\begin{clojurecode}
+(defn rating-comparator [a b]
+  (compare (emf/eget b :avgRating) (emf/eget a :avgRating)))
+\end{clojurecode}
+
+As every comparator, it gets two objects \code|a| and \code|b| (here, two
+couples or cliques) and compares them.  \code|compare| is the standard Clojure
+comparator which works for objects of any class implementing the
+\code|java.lang.Comparable| interface.  Since we compare the average rating of
+\code|b| with the average rating of \code|a|, a descending order is defined.
+
+The comparator for the number of common movies is shown below.
+
+\begin{clojurecode*}{firstnumber=3}
+(defn common-movies-comparator [a b]
+  (compare (.size ^java.util.Collection (emf/eget-raw b :commonMovies))
+           (.size ^java.util.Collection (emf/eget-raw a :commonMovies))))
+\end{clojurecode*}
+
+Like with the \code|person-count| and \code|movie-count| functions above, we
+use type-hints to call the Java method \code|Collection.size()| directly on the
+\code|EList| holding the common movies of the two groups \code|a| and \code|b|.
+
+For the next comparator that compares the two groups' actors according to their
+names, we need some helper functions first.  Polyfns are FunnyQT's way to
+define functions that dispatch polymorphically according to the metamodel type
+of its first argument.  First, a polyfn is declared using
+\code|declare-polyfn|, and then arbitrary many implementations for different
+metamodel types can be added using \code|defpolyfn|.
+
+\begin{clojurecode*}{firstnumber=6}
+(poly/declare-polyfn actors [group])
+
+(poly/defpolyfn actors movies.Couple [group]
+  [(emf/eget group :p1) (emf/eget group :p2)])
+
+(poly/defpolyfn actors movies.Clique [group]
+  (emf/eget-raw group :persons))
+\end{clojurecode*}
+
+In line 6, the polyfn \code|actors| with one parameter \code|group| is
+declared.  Its intent is to return a collection of all actors and actresses
+that are part of the given group.
+
+In lines 7 and 8, one implementation for elements of metamodel type
+\code|Couple| is added.  It returns a vector of two elements: the person in the
+couple's \code|p1| reference, and the person in the couple's \code|p2|
+reference.
+
+Lines 9 and 10 define another implementation for elements of metamodel type
+\code|Clique|.  Here, the contents of the group's \code|persons| reference is
+returned which already is the collection of all the clique's members.
+
+Using this polyfn, the comparator for ordering groups according to the names of
+their members can be defined like shown in the next listing.
+
+\begin{clojurecode*}{firstnumber=13}
+(defn names-comparator [a b]
+  (compare (str/join ";" (map #(emf/eget % :name) (actors a)))
+           (str/join ";" (map #(emf/eget % :name) (actors b)))))
+\end{clojurecode*}
+
+It simply compares the strings that result from interleaving each group's actor
+names with a semicolon as a separator.  Since here we compare group \code|a|
+with group \code|b|, a lexicographically ascending order is achieved.
+
+Until now, there are only three individual comparators, but sorting is always
+done with one single comparator.  So the following listing defines a
+higher-order comparator, e.g., a function that receives arbitrary many
+comparators and returns a new comparator which compares using the given ones.
+
+\begin{clojurecode*}{firstnumber=16}
+(defn comparator-combinator [& comparators]
+  (fn [a b]
+    (loop [cs comparators]
+      (if (seq cs)
+        (let [r ((first cs) a b)]
+          (if (zero? r)
+            (recur (rest cs))
+            r))
+        (u/errorf "%s and %s are incomparable!" a b)))))
+\end{clojurecode*}
+
+The function \code|comparator-combinator| returns an anonymous function with
+two arguments \code|a| and \code|b|.  This function recurses\footnote{Clojure's
+  \code|(loop [<bindings>] ... (recur <newvals>))| is a local tail-recursion.
+  \code|loop| establishes bindings just like \code|let|, and \code|recur| jumps
+  back to the \code|loop| providing new values for the variables.} over the
+given \code|comparators|.  It applies the first one to \code|a| and \code|b|,
+and if that results in a non-zero value returns this value.  But if the value
+is zero, i.e., no distinction with respect to sorting order can be made with
+that comparator, the function recurs and \code|cs| is rebound to the remaining
+comparators.  In case all comparators return zero for two given groups, and
+error is signalled.
+
+So finally, here are the two top-15 groups functions.
+
+\begin{clojurecode*}{firstnumber=25}
+(defn groups-by-avg-rating [groups]
+  (sort (comparator-combinator rating-comparator common-movies-comparator names-comparator)
+        groups))
+
+(defn groups-by-common-movies [groups]
+  (sort (comparator-combinator common-movies-comparator rating-comparator names-comparator)
+        groups))
+\end{clojurecode*}
+
+\code|groups-by-avg-rating| gets a collection of groups \code|groups| and then
+sorts them by the combined comparator first taking the average rating into
+account, then the number of common movies, and eventually the names of the
+groups' actors if neither of the two former comparators could decide on the two
+groups order.
+
+\code|group-by-common-movies| is defined similar except that the
+\code|common-movies-comparator| is applied first instead of the
+\code|rating-comparator|.
+
+Those where the actually important parts for solving the top-15 tasks.  The
+solution contains 39 more lines of code that apply the sorting functions to the
+groups in a model, then take the first 15 groups, format the results nicely,
+and spit them to files.
+
+
+\section{Evaluation}
+\label{sec:evaluation}
+
+With respect to correctness, the FunnyQT solution computes the exact same
+numbers of couples and cliques of various sizes as printed in Table~1 and
+Table~2 of the case description.  Also, the top-15 lists are identical for all
+models.
+
+Table~\ref{tab:bench-synth} shows the execution times for the synthetic models,
+and Table~\ref{tab:bench-imdb} shows the execution times for the IMDb models.
+These times include the pattern matching time, the time needed for creating the
+\code|Couple| and \code|Clique| elements, and the time needed for setting their
+attributes and references including the computation of the average ratings.
+The times needed for generating the synthetic models and for loading the IMDb
+models are excluded as are the query times for computing the top-15 lists.
+
+The benchmarks were run on a GNU/Linux virtual machine with eight 2.8GHz cores
+and 32GB of RAM, 30GB of which were dedicated to the JVM process.
+
+\begin{table}
+  \centering
+  \begin{tabular}{| r | r | r | r | r |}
+    \hline
+    \textbf{Model (N)} & \textbf{Couples} & \textbf{3-Cliques} & \textbf{4-Cliques} & \textbf{5-Cliques}\\
+    \hline
+    1000   &    0.274602528  &  0.349061152  &  0.483500704  &  0.422209712\\
+    2000   &    0.547466160  &  0.722435888  &  0.724224848  &  0.628254896\\
+    3000   &    0.867141568  &  1.069310832  &  1.028428128  &  0.949939408\\
+    4000   &    1.119036992  &  1.437665888  &  1.375804384  &  1.216168544\\
+    5000   &    1.406045888  &  1.798415536  &  1.723140656  &  1.502462976\\
+    10000  &    2.830416128  &  3.607990864  &  3.482801824  &  3.098102832\\
+    50000  &    14.324653712 &  17.972272736 &  17.346692096 &  15.327367392\\
+    100000 &    28.300907200 &  36.352164048 &  35.396692384 &  31.440208448\\
+    200000 &    57.159804192 &  72.209621472 &  69.233912672 &  60.430165808\\
+    \hline
+  \end{tabular}
+  \caption{Execution times in seconds for the synthetic models}
+  \label{tab:bench-synth}
+\end{table}
+
+As can be seen in Table~\ref{tab:bench-synth}, the FunnyQT solution scales
+completely linearly for the synthetic models which is expected due to their
+construction.
+
+\begin{table}
+  \centering
+  \begin{tabular}{| l | r | r |}
+    \hline
+    \textbf{Model}                  & \textbf{Couples} & \textbf{3-Cliques}\\
+    \hline
+    imdb-0005000-49930.movies.bin   &   1.677278992    &        6.957570992\\
+    imdb-0010000-98168.movies.bin   &   1.702668160    &        11.333623024\\
+    imdb-0030000-207420.movies.bin  &   2.610028032    &        12.507362768\\
+    imdb-0045000-299504.movies.bin  &   3.947932624    &        15.714349728\\
+    imdb-0065000-404920.movies.bin  &   6.170203664    &        21.243492448\\
+    imdb-0085000-499995.movies.bin  &   9.012942560    &        26.388751712\\
+    imdb-0130000-709551.movies.bin  &   18.135307008   &        54.709762992\\
+    imdb-0200000-1004463.movies.bin &   35.409998560   &        117.833811360\\
+    imdb-0340000-1505143.movies.bin &   88.052992592   &        366.832061200\\
+    imdb-0495000-2000900.movies.bin &   159.973018224  &        757.280006768\\
+    imdb-0660000-2501893.movies.bin &   278.318685728  &        1457.689379247\\
+    imdb-all-3257145.movies.bin     &   619.160156640  &        4295.030516512\\
+    \hline
+  \end{tabular}
+  \caption{Execution times in seconds for the IMDb models}
+  \label{tab:bench-imdb}
+\end{table}
+
+In contrast, the transformation of the real IMDb models requires more effort in
+general because they are much more cross-linked.  Whereas in the synthetic
+models, every person acts in at most five movies, and every movie has at most
+five acting persons, in the complete IMDb model, there are persons acting in up
+to 1800 movies, and movies with more than 1200 actors.
+
+The main bottleneck of the FunnyQT transformation is the required memory.  The
+generated rules for finding groups of a given size first compute all matches
+(each match being represented as a vector containing the persons being members
+of the group plus their set of common movies) and then generate one new couple
+or clique element for each match.  This means that the original model, all
+matches, and also all new elements reside in memory at the same time.
+
+One could sacrifice a bit of performance for better memory-efficiency by not
+including the set of common movies already in the matches, but instead
+re-compute it in the rule's action creating the couple or clique elements.
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+In this paper, the FunnyQT solution to the TTC 2014 Movie Database Case has
+been discussed.  It correctly solves all core and extension tasks, and its
+performance is quite good due to the fact that FunnyQT is able to perform
+pattern matching in parallel on multi-core systems.
+
+Also, the solution is concise.  All in all, it consists of 152 lines of code
+(including boilerplace code like namespace definitions) in three source files,
+one for the generation of the synthetic test models (30 LOC), one for the
+couple and cliques rules (52 LOC), and one for the queries (70 LOC).
+
+
+\bibliographystyle{eptcs}
+\bibliography{ttc-movie-couples}
+\end{document}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% TeX-engine: pdflatex-shell-escape
+%%% End:

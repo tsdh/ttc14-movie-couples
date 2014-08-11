@@ -19,6 +19,15 @@ doc/*.blg
 doc/*.log
 doc/*.out
 doc/*.synctex.gz
+postproc/.minted-ttc-movie-couples/
+postproc/auto
+postproc/*.aux
+postproc/*.bbl
+postproc/*.blg
+postproc/*.log
+postproc/*.out
+postproc/*.pag
+postproc/*.synctex.gz
 presentation/auto/
 presentation/movies.aux
 presentation/movies.log
