@@ -129,9 +129,16 @@ returns the movies that person acted in as a set.  And lastly, a function
 The function \code|n-common-movies?| printed in the next listing gets an
 integer \code|n|, a person element \code|p|, and a sequence of \code|more|
 person elements \footnote{The Clojure varargs syntax \code|& els| is similar to
-  Java's \code|Type... els| syntax.}.  If all given persons act together in at
-least \code|n| movies, the set of common movies is returned.  Otherwise,
-\code|nil| is returned.  Since in Clojure the values \code|nil| and
+  Java's \code|Type... els| syntax.}.  \code|loop| and \code|recur| implement a
+local tail-recursion.  Initially, the set of common movies \code|common| is
+bound to the set of \code|p|'s movies, and the remaining persons are bound to
+\code|more| shadowing the function's parameter of the same name.  If there are
+more persons, the \code|recur| in line~5 jumps back to the \code|loop| in
+line~2 where \code|common| is rebound to the intersection of \code|common| and
+the movies of the first person in \code|more|.  Likewise, \code|mode| is
+rebound to the remainder of \code|more|.  Thus, if all given persons act
+together in at least \code|n| movies, the set of common movies is returned.
+Otherwise, \code|nil| is returned.  Since in Clojure the values \code|nil| and
 \code|false| are falsy while every other value is truthy, this function can act
 as a predicate and still return more information, i.e., the common movies, in
 the positive case.
@@ -156,45 +163,19 @@ Clojure datastructures (literals, symbols, lists, vectors), a macro is
 essentially a transformation on the abstract syntax tree of the Clojure code
 that's passed to the macro.
 
-The next listings shows the \code|define-groups-rule| macro which is the
-higher-order transformation solving the tasks.  It receives an parameter
-\code|n| and, as its name suggests, expands into a rule for finding couples (if
-\code|n| equals 2) or cliques of size \code|n|.
-
-\begin{clojurecode}
-(defmacro define-group-rule [n]
-  (let [psyms (map #(symbol (str "p" %)) (range n))]
-    `(ip/defrule ~(symbol (str "make-groups-of-" n "!"))
-       {:forall true}
-       [~'model ~'c]
-       [~'m<Movie> :when (>= (person-count ~'m) ~n)
-        ~@(mapcat (fn [i]
-                    (let [ps (nth psyms i)]
-                      `[~'m -<persons>-> ~ps
-                        :when (>= (movie-count ~ps) ~'c)
-                        ~@(when-not (zero? i)
-                            `[:when (neg? (compare (emf/eget-raw ~(nth psyms (dec i)) :name)
-                                                   (emf/eget-raw ~ps :name)))])
-                        ~@(when-not (or (zero? i) (= i (dec n)))
-                            `[:when (n-common-movies? ~'c ~@(take (inc i) psyms))])]))
-                  (range n))
-        :when-let [~'cms (n-common-movies? ~'c ~@psyms)]
-        :as [~'cms ~@psyms]
-        :distinct]
-       (emf/ecreate! ~'model ~(if (= n 2) `'Couple `'Clique)
-                     ~(if (= n 2)
-                        `{:commonMovies ~'cms :avgRating (avg-rating ~'cms)
-                          :p1 ~(first psyms) :p2 ~(second psyms)}
-                        `{:commonMovies ~'cms :avgRating (avg-rating ~'cms)
-                          :persons [~@psyms]})))))
-\end{clojurecode}
+Listing~\ref{lst:rule-gen-macro} in the appendix on
+page~\pageref{lst:rule-gen-macro} shows the \code|define-groups-rule| macro
+which is the higher-order transformation solving the tasks.  It receives an
+parameter \code|n| and, as its name suggests, expands into a rule for finding
+couples if \code|n| equals 2 or cliques of size \code|n| for larger values of
+\code|n|.
 
 We're not going to discuss the macro in details, however the central idea of
 the Clojure (or Lisp) macrosystem is that one defines the basic structure of
 the macro's expansion using a \emph{quasi-quoted} (backticked) form as a kind
 of template.  In this quasi-quoted form, values computed at compile-time can be
 inserted using the \emph{unquote} (\code|~|) and \emph{unquote-splicing}
-(\code|~@|) operators to fill the template's variable parts.
+(\code|~@|) operators to fill in the template's variable parts.
 
 The last part of the implementation of the tasks 2 and 3 and the extension
 tasks 2 and 3 is to actually invoke the macro to create the transformation
@@ -247,6 +228,11 @@ order of the names of the persons \code|p0|, \code|p1|, and \code|p2|.
 Line~8 ensures that \code|p0| and \code|p1| have at least \code|c| common
 movies.  The same for the complete clique of three persons is also asserted in
 line 11, where the common movies are also bound to the variable~\code|cms|.
+The first constraint is there only for performance reasons.  Clearly, if
+\code|p0| and \code|p1| already have less than \code|c| common movies, then
+\code|p0|, \code|p1|, and \code|p2| cannot have more.  This test ensures that
+the pattern matching process stops for the combination of \code|p0| and
+\code|p1| as soon as possible.
 
 The last line of the pattern, line 12, defines that each match should be
 represented as a vector containing the set of common movies \code|cms| and the
@@ -365,7 +351,7 @@ dedicated to the JVM process.
   \begin{center}
     \begin{tabular}{| l | r | r |}
       \hline
-      \textbf{Model}                  & \textbf{Couples} & \textbf{3-Cliques}\\
+      \textbf{Model}                  & \textbf{Couples (secs)} & \textbf{3-Cliques (secs)}\\
       \hline
       imdb-0005000-49930.movies.bin   &   1.677278992    &        6.957570992\\
       imdb-0010000-98168.movies.bin   &   1.702668160    &        11.333623024\\
@@ -395,6 +381,40 @@ definitions) in three source files, one for the generation of the synthetic
 test models (30 LOC), one for the couple and cliques rules (52 LOC), and one
 for the queries (70 LOC, most of which are concerned with pretty-printing the
 results into files).
+
+\appendix
+
+\begin{listing}
+\begin{clojurecode}
+(defmacro define-group-rule [n]
+  (let [psyms (map #(symbol (str "p" %)) (range n))]
+    `(ip/defrule ~(symbol (str "make-groups-of-" n "!"))
+       {:forall true}
+       [~'model ~'c]
+       [~'m<Movie> :when (>= (person-count ~'m) ~n)
+        ~@(mapcat (fn [i]
+                    (let [ps (nth psyms i)]
+                      `[~'m -<persons>-> ~ps
+                        :when (>= (movie-count ~ps) ~'c)
+                        ~@(when-not (zero? i)
+                            `[:when (neg? (compare (emf/eget-raw ~(nth psyms (dec i)) :name)
+                                                   (emf/eget-raw ~ps :name)))])
+                        ~@(when-not (or (zero? i) (= i (dec n)))
+                            `[:when (n-common-movies? ~'c ~@(take (inc i) psyms))])]))
+                  (range n))
+        :when-let [~'cms (n-common-movies? ~'c ~@psyms)]
+        :as [~'cms ~@psyms]
+        :distinct]
+       (emf/ecreate! ~'model ~(if (= n 2) `'Couple `'Clique)
+                     ~(if (= n 2)
+                        `{:commonMovies ~'cms :avgRating (avg-rating ~'cms)
+                          :p1 ~(first psyms) :p2 ~(second psyms)}
+                        `{:commonMovies ~'cms :avgRating (avg-rating ~'cms)
+                          :persons [~@psyms]})))))
+\end{clojurecode}
+\caption{The higher-order transformation generating couple and cliques rules}
+\label{lst:rule-gen-macro}
+\end{listing}
 
 
 \bibliographystyle{eptcs}
